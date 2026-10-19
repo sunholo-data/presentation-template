@@ -2,6 +2,32 @@
 
 A starting point for building slide decks with Claude Code. Each deck is a self-contained HTML file: 16:9 canvas, dark and light themes, keyboard navigation, no build step.
 
+## Fresh laptop setup
+
+This assumes a laptop with only Claude Desktop installed so far. Claude Desktop does not include git, so install it separately on every platform.
+
+1. **Install Claude Desktop** from https://claude.com/download and sign in.
+2. **Install git**:
+   - **macOS:** run `xcode-select --install` in Terminal and accept the prompt.
+   - **Windows:** install Git for Windows from https://git-scm.com/download/win. The defaults are fine. It also installs Git Bash, which Claude uses for shell commands.
+   - **Linux:** `sudo apt install git` (Debian/Ubuntu) or `sudo dnf install git` (Fedora).
+3. **Tell git who you are**, using the name and email on your GitHub account:
+   ```bash
+   git config --global user.name "Your Name"
+   ```
+   ```bash
+   git config --global user.email "you@example.com"
+   ```
+4. **Install the GitHub CLI (recommended).** It lets Claude open and check pull requests. Install it with `brew install gh` (macOS, needs Homebrew), `winget install --id GitHub.cli` (Windows), or from https://github.com/cli/cli/blob/trunk/docs/install_linux.md (Linux). Then run `gh auth login` and choose GitHub.com, HTTPS, and browser login.
+5. **Clone this repo** and open the folder in Claude Desktop's **Code** tab:
+   ```bash
+   git clone https://github.com/sunholo-data/presentation-template.git
+   ```
+
+Working on a deck: create a branch rather than working on `main`, commit there, and push the branch. Open the PR against `main` in the GitHub web UI, or ask Claude to do it if you installed `gh`.
+
+If `git: command not found` appears, the install didn't finish or your terminal was open before it did. Open a new terminal and try again. On Windows, if Claude can't find Git Bash, install Git for Windows and restart Claude Desktop.
+
 ## Quick start
 
 1. Clone this repo and open it in Claude Code.
