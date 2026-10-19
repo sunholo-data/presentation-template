@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Starter demo — Presenter</title>
+<link rel="icon" type="image/svg+xml" href="/sunholo-logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Feature flags (repo-level defaults + per-talk overrides). Optional: if this
+     fails to load, presenter.html falls back to the same defaults inline. -->
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f0f1a;--surface:#1a1a2e;--orange:#e73c17;
+  --orange-dim:rgba(231,60,23,.35);--green:#22c55e;
+  --text:#e2e8f0;--text-dim:#718096;--ghost:rgba(255,255,255,.12);
+  --bar-bg:rgba(15,15,26,.8);--bar-border:rgba(255,255,255,.06);
+  --mono:'JetBrains Mono',monospace;--sans:'Montserrat',sans-serif;
+}
+[data-theme="light"]{
+  --bg:#f6f8fa;--surface:#ffffff;--orange:#bd3012;
+  --orange-dim:rgba(189,48,18,.2);--green:#16a34a;
+  --text:#2c3e50;--text-dim:#526677;--ghost:rgba(0,0,0,.1);
+  --bar-bg:rgba(255,255,255,.85);--bar-border:rgba(0,0,0,.08);
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* ─── Top bar ─── */
+.top-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 16px;border-bottom:1px solid var(--bar-border);
+  flex-shrink:0;background:var(--bar-bg);backdrop-filter:blur(8px);position:relative;z-index:30;
+}
+.top-left{display:flex;align-items:center;gap:10px}
+.top-logo{height:20px;opacity:.7}
+.top-logo.ailang{height:24px}
+.presenter-title{font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:.02em}
+.presenter-title .accent{color:var(--orange)}
+
+/* ─── Deck picker (compact, space-stable) ─── */
+.deck-picker{position:relative;display:flex;align-items:center;gap:6px}
+.picker-nav{
+  width:26px;height:26px;border-radius:50%;border:1px solid var(--ghost);
+  background:transparent;color:var(--text-dim);cursor:pointer;font-size:10px;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;
+}
+.picker-nav:hover{border-color:var(--orange);color:var(--orange)}
+.picker-nav:disabled{opacity:.3;cursor:default;border-color:var(--ghost);color:var(--text-dim)}
+.picker-current{
+  display:flex;align-items:center;gap:9px;
+  padding:5px 14px;border-radius:16px;border:1px solid var(--ghost);
+  background:transparent;color:var(--text);cursor:pointer;
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.02em;transition:all .2s;
+}
+.picker-current:hover{border-color:var(--orange)}
+.picker-pos{color:var(--text-dim);font-variant-numeric:tabular-nums}
+.picker-caret{font-size:9px;color:var(--text-dim);transition:transform .2s}
+/* neighbour reel — prev/next deck names flanking the current pill */
+.picker-side{
+  max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:transparent;border:none;cursor:pointer;padding:4px 2px;
+  font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.02em;
+  color:var(--text-dim);opacity:.55;transition:opacity .2s,color .2s;
+}
+.picker-side:hover{opacity:1;color:var(--text)}
+.picker-side:empty{display:none}
+.deck-picker.open .picker-current{border-color:var(--orange)}
+.deck-picker.open .picker-caret{transform:rotate(180deg);color:var(--orange)}
+
+/* popover jump-menu — overlays, never reflows the bar */
+.picker-menu{
+  position:absolute;top:calc(100% + 8px);left:50%;
+  transform:translateX(-50%) translateY(-6px);
+  min-width:250px;max-height:78vh;overflow-y:auto;
+  background:var(--surface);border:1px solid var(--bar-border);border-radius:12px;
+  box-shadow:0 14px 44px rgba(0,0,0,.35);padding:6px;z-index:50;
+  opacity:0;visibility:hidden;pointer-events:none;transition:opacity .16s,transform .16s;
+}
+.deck-picker.open .picker-menu{opacity:1;visibility:visible;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+.picker-group{
+  padding:9px 10px 3px;font-family:var(--mono);font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);opacity:.65;
+}
+.picker-item{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:6px 10px;border-radius:7px;border:none;background:transparent;
+  color:var(--text);cursor:pointer;font-family:var(--mono);font-size:12px;text-align:left;
+  transition:background .15s;
+}
+.picker-item:hover{background:var(--orange-dim)}
+.picker-item.active{background:var(--orange);color:#fff}
+.picker-item .idx{font-size:10px;color:var(--text-dim);min-width:20px;font-variant-numeric:tabular-nums}
+.picker-item.active .idx{color:rgba(255,255,255,.75)}
+.picker-item .mins{margin-left:auto;font-size:9px;color:var(--text-dim);opacity:.7}
+.picker-item.active .mins{color:rgba(255,255,255,.75)}
+
+.top-right{display:flex;align-items:center;gap:8px}
+.theme-toggle{
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--ghost);
+  background:transparent;color:var(--text-dim);cursor:pointer;
+  font-size:12px;transition:all .25s;display:flex;align-items:center;justify-content:center;
+}
+.theme-toggle:hover{border-color:var(--orange);color:var(--orange)}
+#densityToggle.guide{border-color:var(--orange);color:var(--orange)}
+
+/* ─── Clock & timer ─── */
+.clock{
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  color:var(--text-dim);letter-spacing:.04em;
+  padding:4px 8px;border-radius:4px;border:1px solid transparent;
+  cursor:pointer;user-select:none;transition:all .2s;
+  display:flex;align-items:center;gap:6px;
+}
+.clock:hover{border-color:var(--ghost);color:var(--text)}
+.clock.running{color:var(--text)}
+.clock .dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);transition:background .2s}
+.clock.running .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* ─── Bottom bar timer block ─── */
+.timer-block{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.timer-deck{display:flex;align-items:center;gap:8px;min-width:180px}
+.timer-deck .label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6}
+.timer-deck .vals{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.timer-bar{position:relative;width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+[data-theme="light"] .timer-bar{background:rgba(0,0,0,.08)}
+.timer-bar .fill{position:absolute;inset:0;width:0;background:var(--green);transition:width .5s linear,background .3s}
+.timer-bar .fill.warn{background:#f59e0b}
+.timer-bar .fill.over{background:var(--orange)}
+.timer-delta{font-weight:700;font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--ghost)}
+.timer-delta.ahead{color:var(--green);border-color:rgba(34,197,94,.3)}
+.timer-delta.behind{color:var(--orange);border-color:var(--orange-dim)}
+
+/* ─── Iframe viewport ─── */
+.deck-viewport{flex:1;position:relative;overflow:hidden}
+.deck-frame{position:absolute;inset:0;width:100%;height:100%;border:none;opacity:0;transition:opacity .4s ease;pointer-events:none}
+.deck-frame.active{opacity:1;pointer-events:auto}
+
+/* ─── Bottom bar ─── */
+.bottom-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 16px;border-top:1px solid var(--bar-border);
+  flex-shrink:0;background:var(--bar-bg);backdrop-filter:blur(8px);
+}
+.bottom-left{display:flex;align-items:center;gap:12px}
+.nav-info{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.nav-info .current{color:var(--text);font-weight:700}
+.pdf-btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.03em;color:var(--text-dim);border:1px solid var(--ghost);border-radius:999px;padding:4px 11px;cursor:pointer;text-decoration:none;transition:all .2s}
+.pdf-btn:hover{border-color:var(--orange);color:var(--orange)}
+.pdf-btn i{font-size:11px}
+.slide-nav{display:flex;align-items:center;gap:6px}
+.nav-hints{display:flex;align-items:center;gap:6px}
+.kbd{display:inline-block;padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--text-dim)}
+[data-theme="light"] .kbd{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1)}
+.hint-text{font-size:10px;color:var(--text-dim)}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="top-bar">
+    <div class="top-left">
+<img src="../images/logos/sunholo-logo.svg" alt="Sunholo" class="top-logo">
+      <span class="presenter-title">Starter demo</span>
+    </div>
+    <div class="deck-picker" id="deckPicker">
+      <button class="picker-nav" id="pickerPrev" title="Previous deck (↑)"><i class="fas fa-chevron-left"></i></button>
+      <button class="picker-side" id="pickerPrevLabel" title="Previous deck (↑)"></button>
+      <button class="picker-current" id="pickerCurrent" aria-haspopup="true" title="Jump to deck">
+        <span class="picker-pos" id="pickerPos">1 / 1</span>
+        <span class="picker-label" id="pickerLabel">—</span>
+        <i class="fas fa-chevron-down picker-caret"></i>
+      </button>
+      <button class="picker-side" id="pickerNextLabel" title="Next deck (↓)"></button>
+      <button class="picker-nav" id="pickerNext" title="Next deck (↓)"><i class="fas fa-chevron-right"></i></button>
+      <div class="picker-menu" id="pickerMenu"></div>
+    </div>
+    <div class="top-right">
+      <div class="clock" id="clock" title="Click: start/pause · Double-click: reset">
+        <span class="dot"></span>
+        <span id="clockTime">--:--</span>
+      </div>
+      <button class="theme-toggle" id="densityToggle" title="Detail notes — stage vs guide (broadcasts to all decks)"><i class="far fa-circle"></i></button>
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme"><i class="fas fa-sun"></i></button>
+    </div>
+  </div>
+
+  <div class="deck-viewport" id="viewport"></div>
+
+  <div class="bottom-bar">
+    <div class="bottom-left">
+      <a class="pdf-btn" id="pdfBtn" download title="Download the whole talk as a PDF (one page per slide)" style="display:none"><i class="fa-solid fa-file-pdf"></i> PDF</a>
+      <div class="nav-info">Deck <span class="current" id="deckNum">1</span> / <span id="deckTotal">1</span></div>
+      <div class="slide-nav">
+        <button class="picker-nav" id="slidePrev" title="Previous slide (←)"><i class="fas fa-chevron-left"></i></button>
+        <span class="nav-info">Slide <span class="current" id="slideNum">–</span> / <span id="slideTotal">–</span></span>
+        <button class="picker-nav" id="slideNext" title="Next slide (→)"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+    <div class="timer-block">
+      <div class="timer-deck">
+        <span class="label">Deck</span>
+        <span class="vals"><span id="deckElapsed">0:00</span> / <span id="deckBudget">0:00</span></span>
+        <div class="timer-bar"><div class="fill" id="deckFill"></div></div>
+      </div>
+      <div class="timer-deck">
+        <span class="label">Total</span>
+        <span class="vals"><span id="totalElapsed">0:00</span> / <span id="totalBudget">0:00</span></span>
+      </div>
+      <span class="timer-delta" id="schedDelta" title="Schedule delta — green: ahead, orange: behind">±0:00</span>
+    </div>
+    <div class="nav-hints">
+      <span class="kbd">←</span><span class="kbd">→</span><span class="hint-text">slides</span>
+      <span style="margin:0 6px;color:var(--ghost)">|</span>
+      <span class="kbd">↑</span><span class="kbd">↓</span><span class="hint-text">decks</span>
+      <span style="margin:0 6px;color:var(--ghost)">|</span>
+      <span class="kbd">D</span><span class="hint-text">detail</span>
+      <span class="tl-hint" style="display:none"><span style="margin:0 6px;color:var(--ghost)">|</span>
+        <span class="kbd">Q</span><span class="hint-text">question</span></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+  // ═══════════════════════════════════════════════════════════════
+  // PLAYLIST — edit to reorder / add / remove decks.
+  //   `minutes` = budgeted talk time for that deck (drives the timer bar
+  //               and the schedule delta; 0 = off-clock).
+  //   `group`   = optional heading in the jump menu (blocks, acts, appendix).
+  // ═══════════════════════════════════════════════════════════════
+  const PLAYLIST = [
+    { src: '01-hello.html', label: 'Starter deck', minutes: 2 },
+    { src: '02-second.html', label: 'Second deck', minutes: 2 },
+  ];
+
+  // Downloadable PDF for this talk, produced by `node scripts/export-pdf.mjs <folder>`.
+  // Set to null when there's no PDF — the button hides itself.
+  const PDF = null;
+
+  // ═══════════════════════════════════════════════════════════════
+
+  // ── Feature flags ──────────────────────────────────────────────
+  // presenter.config.js supplies defaults + per-talk overrides. These
+  // literals are the fallback when it's missing, so a deck opened from a
+  // stray copy of this file still works.
+  const TALK_ID = (location.pathname.replace(/\/[^/]*$/, '').split('/').filter(Boolean).pop()) || 'talk';
+  const CFG = (function () {
+    const fallback = { picker: true, timer: true, density: true, pdf: true, talklog: false };
+    try {
+      const c = window.PRESENTER_CONFIG || {};
+      return Object.assign({}, fallback, c.defaults || {}, (c.talks || {})[TALK_ID] || {});
+    } catch (e) { return fallback; }
+  })();
+
+  let currentDeck = 0;
+  let frames = [];
+  let talkLog = null;      // set once assets/talklog.js loads, when the flag is on
+  let lastSlide = { index: -1, total: 0, title: '', text: '' };  // slide on screen
+  const viewport = document.getElementById('viewport');
+  const deckNum = document.getElementById('deckNum');
+  const deckTotal = document.getElementById('deckTotal');
+  const themeToggle = document.getElementById('themeToggle');
+
+  deckTotal.textContent = PLAYLIST.length;
+
+  const pdfBtn = document.getElementById('pdfBtn');
+  if (PDF && CFG.pdf) { pdfBtn.href = PDF; pdfBtn.style.display = ''; }
+  if (!CFG.picker) document.getElementById('deckPicker').style.display = 'none';
+  if (!CFG.density) document.getElementById('densityToggle').style.display = 'none';
+  if (!CFG.timer) {
+    document.getElementById('clock').style.display = 'none';
+    document.querySelector('.timer-block').style.display = 'none';
+  }
+
+  PLAYLIST.forEach((deck, i) => {
+    const iframe = document.createElement('iframe');
+    iframe.className = 'deck-frame' + (i === 0 ? ' active' : '');
+    iframe.src = deck.src;
+    iframe.setAttribute('allowfullscreen', '');
+    viewport.appendChild(iframe);
+    frames.push(iframe);
+  });
+
+  // ── Deck picker: compact current-deck control + grouped jump menu ──
+  const deckPicker    = document.getElementById('deckPicker');
+  const pickerCurrent = document.getElementById('pickerCurrent');
+  const pickerPos     = document.getElementById('pickerPos');
+  const pickerLabel   = document.getElementById('pickerLabel');
+  const pickerPrev    = document.getElementById('pickerPrev');
+  const pickerNext    = document.getElementById('pickerNext');
+  const pickerPrevLbl = document.getElementById('pickerPrevLabel');
+  const pickerNextLbl = document.getElementById('pickerNextLabel');
+  const pickerMenu    = document.getElementById('pickerMenu');
+  const menuItems     = [];
+  let lastGroup = null;
+
+  PLAYLIST.forEach((deck, i) => {
+    if (deck.group && deck.group !== lastGroup) {
+      const g = document.createElement('div');
+      g.className = 'picker-group';
+      g.textContent = deck.group;
+      pickerMenu.appendChild(g);
+      lastGroup = deck.group;
+    }
+    const item = document.createElement('button');
+    item.className = 'picker-item';
+    item.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
+      '<span class="name"></span>' +
+      (deck.minutes ? '<span class="mins">' + deck.minutes + 'm</span>' : '');
+    item.querySelector('.name').textContent = deck.label;
+    item.addEventListener('click', () => { switchDeck(i); closeMenu(); });
+    pickerMenu.appendChild(item);
+    menuItems.push(item);
+  });
+
+  function openMenu(){
+    deckPicker.classList.add('open');
+    if (menuItems[currentDeck]) menuItems[currentDeck].scrollIntoView({ block: 'nearest' });
+  }
+  function closeMenu(){ deckPicker.classList.remove('open'); }
+
+  pickerCurrent.addEventListener('click', e => {
+    e.stopPropagation();
+    deckPicker.classList.contains('open') ? closeMenu() : openMenu();
+  });
+  pickerPrev.addEventListener('click', () => switchDeck(currentDeck - 1, true));
+  pickerNext.addEventListener('click', () => switchDeck(currentDeck + 1, false));
+  pickerPrevLbl.addEventListener('click', () => switchDeck(currentDeck - 1, true));
+  pickerNextLbl.addEventListener('click', () => switchDeck(currentDeck + 1, false));
+  document.addEventListener('click', e => { if (!deckPicker.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+
+  function updatePicker(){
+    pickerPos.textContent = (currentDeck + 1) + ' / ' + PLAYLIST.length;
+    pickerLabel.textContent = PLAYLIST[currentDeck].label;
+    pickerPrevLbl.textContent = currentDeck > 0 ? PLAYLIST[currentDeck - 1].label : '';
+    pickerNextLbl.textContent = currentDeck < PLAYLIST.length - 1 ? PLAYLIST[currentDeck + 1].label : '';
+    menuItems.forEach((it, i) => it.classList.toggle('active', i === currentDeck));
+    pickerPrev.disabled = currentDeck === 0;
+    pickerNext.disabled = currentDeck === PLAYLIST.length - 1;
+  }
+  updatePicker();
+
+  function switchDeck(n, goToEnd) {
+    if (n < 0 || n >= PLAYLIST.length) return;
+    frames[currentDeck].classList.remove('active');
+    currentDeck = n;
+    const frame = frames[currentDeck];
+    frame.classList.add('active');
+    frame.contentWindow.postMessage({ type: 'deck-command', action: goToEnd ? 'go-last' : 'go-first' }, '*');
+    deckNum.textContent = currentDeck + 1;
+    updatePicker();
+    // Drop the outgoing deck's slide and ask the incoming one to speak up — a
+    // deck that doesn't change slide never reports on its own, and we'd carry
+    // on describing the previous deck.
+    lastSlide = { index: -1, total: 0, title: '', text: '' };
+    updateSlideNav();
+    frame.contentWindow.postMessage({ type: 'deck-command', action: 'report-slide' }, '*');
+    setTimeout(() => frame.contentWindow.focus(), 100);
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'deck-nav') {
+      if (e.data.dir === 'next') switchDeck(currentDeck + 1, false);
+      if (e.data.dir === 'prev') switchDeck(currentDeck - 1, true);
+    }
+    if (e.data.type === 'deck-theme') setTheme(e.data.theme, false);
+    // Which slide a deck is showing — used to time slides and to tag captured
+    // questions with what was on screen when they were asked.
+    if (e.data.type === 'deck-slide') {
+      const i = frames.findIndex(f => f.contentWindow === e.source);
+      if (i === -1) return;
+      if (talkLog) talkLog.onSlide(i, e.data.index, e.data.title);
+      // Only the deck actually on screen should update the slide we track —
+      // background iframes report too as they load.
+      if (i === currentDeck) {
+        lastSlide = { index: e.data.index, total: e.data.total, title: e.data.title || '', text: e.data.text || '' };
+        updateSlideNav();
+          }
+    }
+    // Keyboard focus lives inside the deck iframe during a talk, so decks
+    // relay the keys they don't use themselves.
+    if (e.data.type === 'deck-hotkey') {
+      const k = e.data.key;
+      if (k === 'd') { if (CFG.density) setDensity(densityToggle.classList.contains('guide') ? 'stage' : 'guide', true); }
+      else if (talkLog) talkLog.hotkey(k);
+    }
+  });
+
+  // ── Slide navigation ──
+  // ←/→ only reach a deck when focus is inside its iframe, and on load (or
+  // after clicking the bar) focus is here. So the presenter forwards them, and
+  // the bottom bar carries slide buttons and a counter fed by 'deck-slide'.
+  const slideNumEl = document.getElementById('slideNum');
+  const slideTotalEl = document.getElementById('slideTotal');
+  const slidePrevBtn = document.getElementById('slidePrev');
+  const slideNextBtn = document.getElementById('slideNext');
+  function stepSlide(action) {
+    frames[currentDeck].contentWindow.postMessage({ type: 'deck-command', action: action }, '*');
+  }
+  function updateSlideNav() {
+    const known = lastSlide.index >= 0 && lastSlide.total > 0;
+    slideNumEl.textContent = known ? lastSlide.index + 1 : '–';
+    slideTotalEl.textContent = known ? lastSlide.total : '–';
+    slidePrevBtn.disabled = known && lastSlide.index === 0;
+    slideNextBtn.disabled = known && lastSlide.index === lastSlide.total - 1;
+  }
+  slidePrevBtn.addEventListener('click', () => stepSlide('prev'));
+  slideNextBtn.addEventListener('click', () => stepSlide('next'));
+
+  document.addEventListener('keydown', e => {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); switchDeck(currentDeck + 1, false); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); switchDeck(currentDeck - 1, true); }
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); stepSlide('next'); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); stepSlide('prev'); }
+  });
+
+  viewport.addEventListener('click', () => {
+    const frame = frames[currentDeck];
+    if (frame) frame.contentWindow.focus();
+  });
+
+  function setTheme(theme, broadcast) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeToggle.innerHTML = theme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+    localStorage.setItem('presenter-theme', theme);
+    if (broadcast !== false) {
+      frames.forEach(f => f.contentWindow.postMessage({ type: 'deck-command', action: 'set-theme', theme: theme }, '*'));
+    }
+  }
+  themeToggle.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    setTheme(cur === 'light' ? 'dark' : 'light', true);
+  });
+  const saved = localStorage.getItem('presenter-theme');
+  if (saved) setTheme(saved, true);
+
+  // ── Detail density (stage vs guide) — one switch broadcasts to every deck ──
+  //    stage = what the room sees (sparse). guide = the same deck with its
+  //    .detail prose revealed, for the laptop and for anyone reading the
+  //    published link cold. Decks default to guide when opened standalone.
+  const densityToggle = document.getElementById('densityToggle');
+  function setDensity(d, broadcast) {
+    densityToggle.classList.toggle('guide', d === 'guide');
+    densityToggle.innerHTML = d === 'guide' ? '<i class="fas fa-circle-info"></i>' : '<i class="far fa-circle"></i>';
+    densityToggle.title = d === 'guide'
+      ? 'Detail ON — guide notes shown on every deck (click for stage view)'
+      : 'Detail OFF — stage view (click to reveal guide notes on every deck)';
+    localStorage.setItem('presenter-density', d);
+    if (broadcast !== false) frames.forEach(f => f.contentWindow.postMessage({ type: 'deck-command', action: 'set-density', density: d }, '*'));
+  }
+  densityToggle.addEventListener('click', () => setDensity(densityToggle.classList.contains('guide') ? 'stage' : 'guide', true));
+  if (CFG.density) setDensity(localStorage.getItem('presenter-density') || 'stage', false);
+
+  document.addEventListener('keydown', e => {
+    if (!CFG.density) return;
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if ((e.key === 'd' || e.key === 'D') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      setDensity(densityToggle.classList.contains('guide') ? 'stage' : 'guide', true);
+    }
+  });
+
+  frames.forEach(f => {
+    f.addEventListener('load', () => {
+      const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+      f.contentWindow.postMessage({ type: 'deck-command', action: 'set-theme', theme: theme }, '*');
+      if (CFG.density) {
+        const density = localStorage.getItem('presenter-density') || 'stage';
+        f.contentWindow.postMessage({ type: 'deck-command', action: 'set-density', density: density }, '*');
+      }
+    });
+  });
+
+  // ── Talk log (optional) ─────────────────────────────────────────
+  // Q captures an audience question against the slide on screen, N a note,
+  // L opens the log. Loaded only when the flag is on — no cost otherwise.
+  if (CFG.talklog) {
+    const s = document.createElement('script');
+    s.src = '../assets/talklog.js';
+    s.onload = () => {
+      const hint = document.querySelector('.tl-hint');
+      if (hint) hint.style.display = '';
+      talkLog = window.TalkLog.mount({
+        talkId: TALK_ID,
+        title: document.title.replace(/\s+—\s+Presenter$/, ''),
+        playlist: PLAYLIST,
+        mountPoint: document.querySelector('.bottom-left'),
+        getDeck: () => currentDeck,
+        getDeckSpent: () => deckSpent,
+        isRunning: () => timerRunning,
+      });
+    };
+    s.onerror = () => console.warn('[presenter] talklog enabled but assets/talklog.js failed to load');
+    document.head.appendChild(s);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLOCK + PER-DECK TIMER + SCHEDULE DELTA
+  // ═══════════════════════════════════════════════════════════════
+  const clockEl       = document.getElementById('clock');
+  const clockTimeEl   = document.getElementById('clockTime');
+  const deckElapsedEl = document.getElementById('deckElapsed');
+  const deckBudgetEl  = document.getElementById('deckBudget');
+  const deckFillEl    = document.getElementById('deckFill');
+  const totalElapsedEl= document.getElementById('totalElapsed');
+  const totalBudgetEl = document.getElementById('totalBudget');
+  const schedDeltaEl  = document.getElementById('schedDelta');
+
+  const TOTAL_BUDGET_SEC = PLAYLIST.reduce((s,d) => s + (d.minutes||0)*60, 0);
+  const deckSpent = PLAYLIST.map(() => 0);
+  let timerRunning = false;
+  let lastTick = null;
+  let activeDeck = 0;
+
+  function fmt(sec){ sec = Math.max(0, Math.round(sec)); return Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0'); }
+  function fmtSigned(sec){ return (sec < 0 ? '-' : '+') + fmt(Math.abs(sec)); }
+
+  function accumulate(){
+    if (!timerRunning) return;
+    const now = Date.now();
+    if (lastTick !== null) deckSpent[activeDeck] += (now - lastTick) / 1000;
+    lastTick = now;
+  }
+
+  function render(){
+    const d = new Date();
+    clockTimeEl.textContent = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+
+    const budget = (PLAYLIST[currentDeck].minutes || 0) * 60;
+    const spent  = deckSpent[currentDeck];
+    deckElapsedEl.textContent = fmt(spent);
+    deckBudgetEl.textContent  = fmt(budget);
+    const ratio = budget > 0 ? spent / budget : 0;
+    deckFillEl.style.width = Math.min(100, ratio * 100) + '%';
+    deckFillEl.classList.toggle('warn', ratio >= 0.8 && ratio < 1);
+    deckFillEl.classList.toggle('over', ratio >= 1);
+
+    const totalSpent = deckSpent.reduce((a,b) => a + b, 0);
+    totalElapsedEl.textContent = fmt(totalSpent);
+    totalBudgetEl.textContent  = fmt(TOTAL_BUDGET_SEC);
+
+    let prevBudgets = 0;
+    for (let i = 0; i < currentDeck; i++) prevBudgets += (PLAYLIST[i].minutes || 0) * 60;
+    const expected = prevBudgets + Math.min(spent, budget);
+    const delta = totalSpent - expected;
+    schedDeltaEl.textContent = fmtSigned(delta);
+    schedDeltaEl.classList.toggle('behind', delta > 5);
+    schedDeltaEl.classList.toggle('ahead',  delta < -5);
+  }
+
+  function tick(){ accumulate(); render(); if (talkLog) talkLog.tick(); }
+  setInterval(tick, 500);
+  render();
+
+  let clickTimer = null;
+  clockEl.addEventListener('click', () => {
+    if (clickTimer) return;
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      timerRunning = !timerRunning;
+      lastTick = timerRunning ? Date.now() : null;
+      activeDeck = currentDeck;
+      clockEl.classList.toggle('running', timerRunning);
+    }, 220);
+  });
+  clockEl.addEventListener('dblclick', () => {
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+    if (!confirm('Reset all deck timers?')) return;
+    for (let i = 0; i < deckSpent.length; i++) deckSpent[i] = 0;
+    timerRunning = false; lastTick = null;
+    clockEl.classList.remove('running');
+    render();
+  });
+
+  const _origSwitchDeck = switchDeck;
+  switchDeck = function(n, goToEnd){
+    if (timerRunning) { accumulate(); activeDeck = n; lastTick = Date.now(); }
+    _origSwitchDeck(n, goToEnd);
+    activeDeck = currentDeck;
+    render();
+  };
+
+})();
+</script>
+</body>
+</html>

@@ -5,7 +5,7 @@ A starting point for building slide decks with Claude Code. Each deck is a self-
 ## Quick start
 
 1. Clone this repo and open it in Claude Code.
-2. Look at the starter deck: open `demo/01-hello.html` in a browser. Use ← → to move, the sun/moon button in the top bar to switch theme, and **D** to switch between stage and guide density.
+2. Open `demo/presenter.html` in a browser. It plays both starter decks: ↓ moves to the next deck, ↑ goes back, and ← → move between slides. The sun/moon button in the top bar switches theme, and **D** switches between stage and guide density.
 3. Ask Claude to build your deck, for example:
 
    > Build a 5-slide deck in `my-talk/` about <your topic>. Use the presentation-slides skill and the existing starter deck as the structure.
@@ -17,7 +17,9 @@ A starting point for building slide decks with Claude Code. Each deck is a self-
 ```
 .claude/skills/presentation-slides/   Skill: rules, design system, slide patterns, lint
 images/logos/                          Shared logo(s). Replace with your own
+demo/presenter.html                     Presenter: lists the decks in demo/ and handles ↑ ↓
 demo/01-hello.html                     Starter deck to copy from
+demo/02-second.html                    Second deck, to test moving between decks
 ```
 
 ## Checking a deck
